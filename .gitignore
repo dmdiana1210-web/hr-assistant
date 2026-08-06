@@ -1,0 +1,10 @@
+# Системные файлы macOS
+.DS_Store
+
+# Секреты — никогда не коммитить
+.env
+.env.*
+.claude/.env
+
+# Личные настройки Claude Code
+.claude/settings.local.json

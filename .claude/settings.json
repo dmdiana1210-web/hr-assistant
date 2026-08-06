@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(*)"
+    ],
+    "ask": [
+      "Write(*)",
+      "Edit(*)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Bash(rm -rf:*)"
+    ]
+  }
+}
