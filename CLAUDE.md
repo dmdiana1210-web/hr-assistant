@@ -40,3 +40,11 @@
 7. Если данных недостаточно, сначала сообщи об этом, а не делай предположений.
 
 8. Бери в анализ только руководящие позиции. Линейные позиции (без подчинённых) отбрасывай и кратко объясняй, почему не взял.
+
+## Git Conventions
+- Commits: Conventional Commits format.
+- Types: feat, fix, docs, refactor, test, chore.
+- Format: type(scope): description.
+- Max subject line: 72 characters.
+- Branch naming: type/short-description.
+- PRs: always target "main".
