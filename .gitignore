@@ -1,10 +1,38 @@
 # Системные файлы macOS
 .DS_Store
+._*
+.AppleDouble
+.LSOverride
+.Spotlight-V100
+.Trashes
 
-# Секреты — никогда не коммитить
+# Секреты и доступы — никогда не коммитить
 .env
 .env.*
 .claude/.env
+secrets/
+*.pem
+*.key
+id_rsa*
+id_ed25519*
 
 # Личные настройки Claude Code
 .claude/settings.local.json
+
+# Временные файлы и логи
+*.tmp
+*.log
+*.bak
+*.cache
+
+# Редакторы и IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Зависимости (на будущее)
+node_modules/
+__pycache__/
+*.pyc
