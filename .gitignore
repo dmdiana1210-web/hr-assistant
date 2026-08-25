@@ -36,3 +36,8 @@ id_ed25519*
 node_modules/
 __pycache__/
 *.pyc
+
+# Сырые выгрузки мониторинга зарплат (HR Assistant) — не коммитить
+materials/raw/
+materials/*.csv
+materials/*.xlsx
