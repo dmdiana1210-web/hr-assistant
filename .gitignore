@@ -25,6 +25,9 @@ id_ed25519*
 *.bak
 *.cache
 
+# Кеш сырых данных мониторинга (vacancies API) — не коммитить
+.cache/
+
 # Редакторы и IDE
 .vscode/
 .idea/
