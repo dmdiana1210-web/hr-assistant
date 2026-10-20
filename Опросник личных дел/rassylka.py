@@ -54,7 +54,8 @@ def ssylka(fio):
 def pismo(fio, shablon="tekst_pisma"):
     chasti = fio.split()
     imya = chasti[1] if len(chasti) > 1 else fio
-    return NASTROYKI[shablon].format(imya=imya, ssylka=ssylka(fio))
+    # В Битрикс24 длинная ссылка прячется за словами «Открыть опросник»
+    return NASTROYKI[shablon].format(imya=imya, ssylka=f"[URL={ssylka(fio)}]Открыть опросник[/URL]")
 
 
 def norm(s):
