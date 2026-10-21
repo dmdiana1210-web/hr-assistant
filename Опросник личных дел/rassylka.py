@@ -24,6 +24,8 @@ ZHURNAL = os.path.join(PAPKA, "zhurnal_rassylki.csv")
 SOTRUDNIKI = os.path.join(PAPKA, "sotrudniki.csv")
 NE_NAYDENY = os.path.join(PAPKA, "net_v_bitrix24.csv")
 NEPONYATNO = os.path.join(PAPKA, "napominanie_proverit.csv")
+# «ФИО в таблице» -> «Фамилия Имя в Битрикс24», для тех, кто записан там иначе (Настя, Неля, вторая фамилия)
+SOOTVETSTVIYA = os.path.join(PAPKA, "bitrix_sootvetstviya.csv")
 
 
 def klyuch():
@@ -113,6 +115,10 @@ def vse(vebhuk):
     for u in vse_polzovateli(vebhuk):
         klyuch_fio = norm(f"{u.get('LAST_NAME', '')} {u.get('NAME', '')}")
         po_fio.setdefault(klyuch_fio, []).append(u["ID"])
+    sootv = {}
+    if os.path.exists(SOOTVETSTVIYA):
+        with open(SOOTVETSTVIYA, encoding="utf-8-sig") as f:
+            sootv = {r["ФИО в таблице"].strip(): norm(r["Как в Битрикс24"]) for r in csv.DictReader(f)}
     otpravleno = uzhe_otpravleno()
     if otpravleno:
         print(f"Внимание: рассылка уже была, отправлено писем: {len(otpravleno)}. "
@@ -122,7 +128,7 @@ def vse(vebhuk):
         if fio in otpravleno:
             continue
         chasti = norm(fio).split()
-        ids = po_fio.get(" ".join(chasti[:2]), [])
+        ids = po_fio.get(sootv.get(fio) or " ".join(chasti[:2]), [])
         if len(ids) == 1:
             plan.append((fio, ids[0]))
         else:
