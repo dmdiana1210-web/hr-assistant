@@ -37,7 +37,7 @@ def put_vkladki(z):
         if s.get("name").strip().upper() == VKLADKA:
             cel = celi[s.get(f"{{{NS['r']}}}id")].lstrip("/")
             return cel if cel.startswith("xl/") else "xl/" + cel
-    raise SystemExit(f"Во файле нет вкладки «{VKLADKA}»")
+    raise ValueError(f"В файле нет вкладки «{VKLADKA}»")
 
 
 def obshchie_stroki(z):

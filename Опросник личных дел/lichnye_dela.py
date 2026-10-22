@@ -260,7 +260,8 @@ def zapis():
                 open(iz, "wb").write(original)
                 sdelano = zapisat(iz, v, pravki, data)  # ошибка в вопросах — до любой записи на Я.Диск
                 kuda = WEBDAV + urllib.parse.quote(rezerv + imya)
-                yadisk("COPY", fayl, zagolovki={"Destination": kuda, "Overwrite": "T"})
+                # Копию оригинала не перезаписываем: при повторном запуске она уже лежит (412)
+                yadisk("COPY", fayl, zagolovki={"Destination": kuda, "Overwrite": "F"}, ok=(200, 201, 204, 207, 412))
                 novyy = open(v, "rb").read()
                 yadisk("PUT", fayl, dannye=novyy)
                 _, proverka = yadisk("GET", fayl)
