@@ -7,9 +7,8 @@
 
 Перед записью каждого файла его копия кладётся на Я.Диск в «Резервные копии опросника/<дата>».
 Что уже записано, отмечено в otchet/zhurnal_bhch.csv: повторно не пишем.
-Пароль приложения Я.Диска берётся из Связки ключей Mac (запись «HR Яндекс Диск»).
+Ключ Я.Диска (OAuth-токен) берётся из Связки ключей Mac (запись «HR Яндекс Диск API»).
 """
-import base64
 import csv
 import json
 import os
@@ -33,7 +32,7 @@ IZMENENIYA = os.path.join(OTCHET, "izmeneniya.csv")
 PLAN = os.path.join(OTCHET, "plan_bhch.csv")
 INDEKS = os.path.join(OTCHET, "indeks_lichnyh_del.json")
 ZHURNAL = os.path.join(OTCHET, "zhurnal_bhch.csv")
-WEBDAV = "https://webdav.yandex.ru"
+API = "https://cloud-api.yandex.net/v1/disk"
 
 # Вопросы вкладки «БХЧ» (столбец B). Связанные строки ищутся только под своим главным вопросом.
 SEM, SVADBA, SUPRUG, KOMPANIYA = "Семейное положение", "Если в браке", "Если замужем", "В какой компании"
@@ -49,47 +48,80 @@ def norm(s):
     return " ".join((s or "").replace("ё", "е").replace("Ё", "Е").lower().split())
 
 
-# --- Я.Диск (WebDAV)
+# --- Я.Диск (REST API: WebDAV закрыт для бесплатного тарифа с октября 2026)
 
 def avtorizaciya():
-    login = NASTROYKI["yadisk_login"]
-    r = subprocess.run(["security", "find-generic-password", "-s", NASTROYKI["keychain_yadisk"], "-a", login, "-w"],
+    r = subprocess.run(["security", "find-generic-password", "-s", NASTROYKI["keychain_yadisk"], "-w"],
                        capture_output=True, text=True)
     if r.returncode != 0 or not r.stdout.strip():
-        sys.exit("Нет пароля Я.Диска в Связке ключей (запись «HR Яндекс Диск»). Попросите Claude открыть окошко "
-                 "для его ввода, как описано в «Как запускать.md».")
-    return "Basic " + base64.b64encode(f"{login}:{r.stdout.strip()}".encode()).decode()
+        sys.exit(f"Нет ключа Я.Диска в Связке ключей (запись «{NASTROYKI['keychain_yadisk']}»). "
+                 "Как его получить — «Как запускать.md», раздел 8.")
+    return "OAuth " + r.stdout.strip()
 
 
 AUTH = None
 
 
-def yadisk(metod, put, dannye=None, zagolovki=None, ok=(200, 201, 204, 207)):
-    """Запрос к Я.Диску с тремя попытками: Яндекс иногда обрывает связь."""
+def zapros(metod, url, dannye=None, s_klyuchom=True, ok=(200, 201, 202)):
+    """Запрос с четырьмя попытками: Яндекс иногда обрывает связь."""
     global AUTH
-    AUTH = AUTH or avtorizaciya()
-    zag = {"Authorization": AUTH, **(zagolovki or {})}
-    for popytka in range(3):
+    zag = {}
+    if s_klyuchom:
+        AUTH = AUTH or avtorizaciya()
+        zag["Authorization"] = AUTH
+    for popytka in range(4):
         try:
-            z = urllib.request.Request(WEBDAV + urllib.parse.quote(put), data=dannye, method=metod, headers=zag)
+            z = urllib.request.Request(url, data=dannye, method=metod, headers=zag)
             with urllib.request.urlopen(z, timeout=120) as o:
                 return o.status, o.read()
         except urllib.error.HTTPError as e:
             if e.code in ok:
                 return e.code, e.read()
-            if e.code == 405 and metod == "MKCOL":  # папка уже есть
-                return e.code, b""
-            oshibka = e
+            if e.code == 401:
+                sys.exit("Я.Диск не принял ключ (истёк или отозван). Получите новый — «Как запускать.md», раздел 8.")
+            oshibka = f"HTTP {e.code}: {e.read()[:200].decode('utf-8', 'replace')}"
         except Exception as e:
             oshibka = e
         time.sleep(3 * (popytka + 1))
-    raise RuntimeError(f"Я.Диск: {metod} {put}: {oshibka}")
+    raise RuntimeError(f"Я.Диск: {metod} {url[:100]}: {oshibka}")
+
+
+def api(metod, chto, ok=(200, 201, 202), **parametry):
+    return zapros(metod, API + chto + "?" + urllib.parse.urlencode(parametry), ok=ok)
+
+
+def skachat(put):
+    _, telo = api("GET", "/resources/download", path="disk:" + put)
+    return zapros("GET", json.loads(telo)["href"], s_klyuchom=False)[1]
+
+
+def zagruzit(put, dannye):
+    _, telo = api("GET", "/resources/upload", path="disk:" + put, overwrite="true")
+    zapros("PUT", json.loads(telo)["href"], dannye=dannye, s_klyuchom=False)
+
+
+def papka(put):
+    api("PUT", "/resources", ok=(201, 409), path="disk:" + put)  # 409 — папка уже есть
+
+
+def kopiya(otkuda, kuda):
+    # Копию не перезаписываем: при повторном запуске она уже лежит (409)
+    api("POST", "/resources/copy", ok=(201, 202, 409),
+        **{"from": "disk:" + otkuda, "path": "disk:" + kuda, "overwrite": "false"})
 
 
 def spisok(put):
-    _, telo = yadisk("PROPFIND", put, zagolovki={"Depth": "1"})
-    puti = [urllib.parse.unquote(h) for h in re.findall(r"<d:href>(.*?)</d:href>", telo.decode("utf-8", "replace"))]
-    return [p for p in puti if p.rstrip("/") != put.rstrip("/")]
+    """Содержимое папки: пути от корня диска, у папок в конце «/»."""
+    puti, sdvig = [], 0
+    while True:
+        _, telo = api("GET", "/resources", path="disk:" + put, limit=1000, offset=sdvig,
+                      fields="_embedded.items.path,_embedded.items.type,_embedded.total")
+        vlozh = json.loads(telo)["_embedded"]
+        for x in vlozh["items"]:
+            puti.append(x["path"].removeprefix("disk:") + ("/" if x["type"] == "dir" else ""))
+        sdvig += len(vlozh["items"])
+        if not vlozh["items"] or sdvig >= vlozh["total"]:
+            return puti
 
 
 def obojti(koren, isklyuchit, glubina=4):
@@ -247,25 +279,21 @@ def zapis():
         sys.exit("Ничего не записано.")
     data = datetime.now().strftime("%d.%m.%Y")
     rezerv = NASTROYKI["papka_rezervnyh_kopiy"].rstrip("/") + "/"
-    yadisk("MKCOL", rezerv)
+    papka(rezerv)
     rezerv += datetime.now().strftime("%Y-%m-%d") + "/"
-    yadisk("MKCOL", rezerv)
+    papka(rezerv)
     oshibki = 0
     with tempfile.TemporaryDirectory() as tmp:
         for fayl, pravki in ochered.items():
             imya = fayl.rsplit("/", 1)[-1]
             try:
-                _, original = yadisk("GET", fayl)
                 iz, v = os.path.join(tmp, "iz.xlsx"), os.path.join(tmp, "v.xlsx")
-                open(iz, "wb").write(original)
+                open(iz, "wb").write(skachat(fayl))
                 sdelano = zapisat(iz, v, pravki, data)  # ошибка в вопросах — до любой записи на Я.Диск
-                kuda = WEBDAV + urllib.parse.quote(rezerv + imya)
-                # Копию оригинала не перезаписываем: при повторном запуске она уже лежит (412)
-                yadisk("COPY", fayl, zagolovki={"Destination": kuda, "Overwrite": "F"}, ok=(200, 201, 204, 207, 412))
+                kopiya(fayl, rezerv + imya)
                 novyy = open(v, "rb").read()
-                yadisk("PUT", fayl, dannye=novyy)
-                _, proverka = yadisk("GET", fayl)
-                if proverka != novyy:
+                zagruzit(fayl, novyy)
+                if skachat(fayl) != novyy:
                     raise RuntimeError("после загрузки файл на Я.Диске не совпал с записанным")
                 v_zhurnal(fayl, "записано")
                 print(f"✓ {imya}: " + "; ".join(sdelano))
