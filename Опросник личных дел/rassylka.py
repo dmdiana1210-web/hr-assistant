@@ -54,7 +54,8 @@ def ssylka(fio):
 
 
 def pismo(fio, shablon="tekst_pisma"):
-    chasti = fio.split()
+    # Девичья фамилия в скобках — «Савченко (Носарева) Анна» — не должна попасть в обращение
+    chasti = re.sub(r"\([^)]*\)", " ", fio).split()
     imya = chasti[1] if len(chasti) > 1 else fio
     # В Битрикс24 длинная ссылка прячется за словами «Открыть опросник»
     return NASTROYKI[shablon].format(imya=imya, ssylka=f"[URL={ssylka(fio)}]Открыть опросник[/URL]")
