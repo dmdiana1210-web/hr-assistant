@@ -44,3 +44,11 @@ __pycache__/
 materials/raw/
 materials/*.csv
 materials/*.xlsx
+
+# HR-автоматизации: секреты и данные сотрудников — не коммитить
+.evn
+*.zip
+BirthdayGreetings/config.json
+Опросник личных дел/*.csv
+Опросник личных дел/otchet/
+Опросник личных дел/nastroyki.json
